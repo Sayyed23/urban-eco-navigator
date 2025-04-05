@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Header from '@/components/Header';
@@ -43,17 +42,101 @@ interface AcceptedChallenge {
   }
 }
 
+// Sample city data
+const sampleCities: Omit<EcoScore, 'id' | 'created_at' | 'updated_at'>[] = [
+  {
+    city: 'San Francisco',
+    region: 'California',
+    air_quality_score: 78,
+    green_cover_score: 82,
+    user_actions_score: 75,
+    total_score: 78,
+  },
+  {
+    city: 'Portland',
+    region: 'Oregon',
+    air_quality_score: 85,
+    green_cover_score: 92,
+    user_actions_score: 88,
+    total_score: 88,
+  },
+  {
+    city: 'Austin',
+    region: 'Texas',
+    air_quality_score: 72,
+    green_cover_score: 68,
+    user_actions_score: 79,
+    total_score: 73,
+  },
+  {
+    city: 'Denver',
+    region: 'Colorado',
+    air_quality_score: 68,
+    green_cover_score: 70,
+    user_actions_score: 81,
+    total_score: 73,
+  },
+  {
+    city: 'Seattle',
+    region: 'Washington',
+    air_quality_score: 80,
+    green_cover_score: 89,
+    user_actions_score: 83,
+    total_score: 84,
+  }
+];
+
 const EcoScore = () => {
   const [selectedCity, setSelectedCity] = useState('');
   const [activeTab, setActiveTab] = useState('scores');
   const [acceptedChallenges, setAcceptedChallenges] = useState<AcceptedChallenge[]>([]);
   const [scoresWithImpact, setScoresWithImpact] = useState<EcoScore[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Initialize database with sample cities if empty
+  useEffect(() => {
+    const initializeData = async () => {
+      // Check if we have cities in the database
+      const { data: existingCities, error: checkError } = await supabase
+        .from('eco_scores')
+        .select('id')
+        .limit(1);
+      
+      if (checkError) {
+        console.error('Error checking cities:', checkError);
+        return;
+      }
+      
+      // If no cities exist, add our sample cities
+      if (!existingCities || existingCities.length === 0) {
+        console.log('No cities found, adding sample cities');
+        
+        for (const city of sampleCities) {
+          const { error } = await supabase
+            .from('eco_scores')
+            .insert([city]);
+          
+          if (error) {
+            console.error(`Error adding city ${city.city}:`, error);
+          }
+        }
+        
+        // Refresh the query
+        await refetch();
+      }
+      
+      setIsInitialized(true);
+    };
+    
+    initializeData();
+  }, []);
   
   // Fetch eco scores from Supabase
   const {
     data: ecoScores = [],
     isLoading,
     error,
+    refetch
   } = useQuery<EcoScore[]>({
     queryKey: ['ecoScores'],
     queryFn: async () => {
@@ -109,8 +192,13 @@ const EcoScore = () => {
       });
       
       setScoresWithImpact(updatedScores);
+      
+      // Set default selected city if not set yet
+      if (!selectedCity && updatedScores.length > 0) {
+        setSelectedCity(updatedScores[0].city);
+      }
     }
-  }, [ecoScores, acceptedChallenges]);
+  }, [ecoScores, acceptedChallenges, selectedCity]);
 
   // Complete a challenge
   const completeChallenge = async (challengeId: string) => {
@@ -151,12 +239,6 @@ const EcoScore = () => {
     setActiveTab('scores');
   };
 
-  useEffect(() => {
-    if (ecoScores.length > 0 && !selectedCity) {
-      setSelectedCity(ecoScores[0]?.city || '');
-    }
-  }, [ecoScores, selectedCity]);
-
   // Check if a challenge has been accepted
   const isChallengeAccepted = (challengeId: string): boolean => {
     return acceptedChallenges.some(c => c.challengeId === challengeId);
@@ -170,6 +252,23 @@ const EcoScore = () => {
     if (!originalScore || !updatedScore) return 0;
     return (updatedScore[field] as number) - (originalScore[field] as number);
   };
+
+  // Display a loading message while data is being initialized
+  if (!isInitialized || isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="container mx-auto px-4 py-16 flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Award className="h-12 w-12 text-green-600 mx-auto mb-4 animate-pulse" />
+            <h1 className="text-2xl font-bold mb-2">Loading Eco-Score Data</h1>
+            <p className="text-gray-600">Please wait while we fetch the latest environmental scores...</p>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -199,7 +298,7 @@ const EcoScore = () => {
                 <SelectValue placeholder="Select a city" />
               </SelectTrigger>
               <SelectContent>
-                {ecoScores.map((score) => (
+                {scoresWithImpact.map((score) => (
                   <SelectItem key={score.id} value={score.city}>
                     {score.city}, {score.region || 'Unknown Region'}
                   </SelectItem>
@@ -221,9 +320,7 @@ const EcoScore = () => {
             </TabsList>
             
             <TabsContent value="scores">
-              {isLoading ? (
-                <div className="text-center py-10">Loading city scores...</div>
-              ) : error ? (
+              {error ? (
                 <div className="text-center py-10 text-red-500">Error loading eco scores</div>
               ) : (
                 <div className="grid md:grid-cols-12 gap-8">
@@ -238,38 +335,42 @@ const EcoScore = () => {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-4">
-                          {scoresWithImpact.map((score, i) => (
-                            <div 
-                              key={score.id} 
-                              className={`flex items-center justify-between p-3 rounded-lg cursor-pointer ${
-                                selectedCity === score.city ? 'bg-green-50 border border-green-200' : 'hover:bg-gray-50'
-                              }`}
-                              onClick={() => setSelectedCity(score.city)}
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className={`flex items-center justify-center w-6 h-6 rounded-full 
-                                  ${i === 0 ? 'bg-amber-100 text-amber-600' : 
-                                    i === 1 ? 'bg-slate-100 text-slate-600' : 
-                                    i === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-600'}`}
-                                >
-                                  {i + 1}
-                                </span>
-                                <div>
-                                  <p className="font-medium">{score.city}</p>
-                                  <p className="text-sm text-gray-500">{score.region}</p>
+                          {scoresWithImpact.length === 0 ? (
+                            <p className="text-center text-gray-500 py-4">No cities available</p>
+                          ) : (
+                            scoresWithImpact.map((score, i) => (
+                              <div 
+                                key={score.id} 
+                                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer ${
+                                  selectedCity === score.city ? 'bg-green-50 border border-green-200' : 'hover:bg-gray-50'
+                                }`}
+                                onClick={() => setSelectedCity(score.city)}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span className={`flex items-center justify-center w-6 h-6 rounded-full 
+                                    ${i === 0 ? 'bg-amber-100 text-amber-600' : 
+                                      i === 1 ? 'bg-slate-100 text-slate-600' : 
+                                      i === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-600'}`}
+                                  >
+                                    {i + 1}
+                                  </span>
+                                  <div>
+                                    <p className="font-medium">{score.city}</p>
+                                    <p className="text-sm text-gray-500">{score.region}</p>
+                                  </div>
+                                </div>
+                                <div className="text-xl font-bold text-green-600">
+                                  {score.total_score}
+                                  {getImprovement(score.city, 'total_score') > 0 && (
+                                    <span className="ml-2 text-sm text-green-500 flex items-center">
+                                      <ArrowUp className="h-3 w-3 mr-0.5" />
+                                      {getImprovement(score.city, 'total_score')}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
-                              <div className="text-xl font-bold text-green-600">
-                                {score.total_score}
-                                {getImprovement(score.city, 'total_score') > 0 && (
-                                  <span className="ml-2 text-sm text-green-500 flex items-center">
-                                    <ArrowUp className="h-3 w-3 mr-0.5" />
-                                    {getImprovement(score.city, 'total_score')}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          ))}
+                            ))
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -277,7 +378,7 @@ const EcoScore = () => {
                   
                   {/* Selected City Score Details */}
                   <div className="md:col-span-8">
-                    {selectedCity && (
+                    {selectedCity && scoresWithImpact.length > 0 ? (
                       <Card>
                         <CardHeader className="pb-2">
                           <CardTitle className="flex items-center gap-2">
@@ -401,6 +502,21 @@ const EcoScore = () => {
                           ))}
                         </CardContent>
                       </Card>
+                    ) : (
+                      <Card>
+                        <CardContent className="p-10 text-center">
+                          <MapPin className="h-10 w-10 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-medium mb-2">No City Selected</h3>
+                          <p className="text-gray-500 mb-6">
+                            Please select a city from the dropdown or leaderboard to view detailed environmental scores.
+                          </p>
+                          {scoresWithImpact.length === 0 && (
+                            <p className="text-amber-600">
+                              No cities are currently available in the database. Try refreshing the page.
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
                     )}
                   </div>
                 </div>
@@ -418,34 +534,44 @@ const EcoScore = () => {
                 )}
                 
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {challenges.map(challenge => (
-                    <Card key={challenge.id} className="transition-all hover:shadow-md">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">{challenge.title}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-gray-600 mb-4">{challenge.description}</p>
-                        <div className="flex justify-between items-center">
-                          <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                            {challenge.points} points
+                  {challenges.length === 0 ? (
+                    <div className="col-span-full text-center py-10">
+                      <Leaf className="h-10 w-10 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium mb-2">No Challenges Available</h3>
+                      <p className="text-gray-500">
+                        Check back later for new environmental challenges.
+                      </p>
+                    </div>
+                  ) : (
+                    challenges.map(challenge => (
+                      <Card key={challenge.id} className="transition-all hover:shadow-md">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-lg">{challenge.title}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-gray-600 mb-4">{challenge.description}</p>
+                          <div className="flex justify-between items-center">
+                            <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                              {challenge.points} points
+                            </div>
+                            {isChallengeAccepted(challenge.id) ? (
+                              <Button variant="outline" disabled className="flex items-center gap-2">
+                                <CheckCircle className="h-4 w-4" />
+                                Accepted
+                              </Button>
+                            ) : (
+                              <Button 
+                                onClick={() => completeChallenge(challenge.id)} 
+                                disabled={!selectedCity}
+                              >
+                                Accept Challenge
+                              </Button>
+                            )}
                           </div>
-                          {isChallengeAccepted(challenge.id) ? (
-                            <Button variant="outline" disabled className="flex items-center gap-2">
-                              <CheckCircle className="h-4 w-4" />
-                              Accepted
-                            </Button>
-                          ) : (
-                            <Button 
-                              onClick={() => completeChallenge(challenge.id)} 
-                              disabled={!selectedCity}
-                            >
-                              Accept Challenge
-                            </Button>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
                 </div>
               </div>
             </TabsContent>
