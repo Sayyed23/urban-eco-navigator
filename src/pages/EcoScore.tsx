@@ -11,6 +11,27 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { Award, Trophy, Leaf, TreeDeciduous, MapPin } from 'lucide-react';
 
+// Define types for our data
+interface EcoScore {
+  id: string;
+  city: string;
+  region: string | null;
+  air_quality_score: number;
+  green_cover_score: number;
+  user_actions_score: number;
+  total_score: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+interface EcoChallenge {
+  id: string;
+  title: string;
+  description: string;
+  points: number;
+  created_at: string | null;
+}
+
 const EcoScore = () => {
   const [selectedCity, setSelectedCity] = useState('');
   
@@ -19,29 +40,31 @@ const EcoScore = () => {
     data: ecoScores = [],
     isLoading,
     error,
-  } = useQuery({
+  } = useQuery<EcoScore[]>({
     queryKey: ['ecoScores'],
     queryFn: async () => {
+      // Cast the response to any first, then to our defined type
       const { data, error } = await supabase
         .from('eco_scores')
         .select('*')
-        .order('total_score', { ascending: false });
+        .order('total_score', { ascending: false }) as any;
       
       if (error) throw error;
-      return data || [];
+      return data as EcoScore[] || [];
     }
   });
   
   // Fetch challenges
-  const { data: challenges = [] } = useQuery({
+  const { data: challenges = [] } = useQuery<EcoChallenge[]>({
     queryKey: ['challenges'],
     queryFn: async () => {
+      // Cast the response to any first, then to our defined type
       const { data, error } = await supabase
         .from('eco_challenges')
-        .select('*');
+        .select('*') as any;
       
       if (error) throw error;
-      return data || [];
+      return data as EcoChallenge[] || [];
     }
   });
 
