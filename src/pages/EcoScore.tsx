@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
-import { Award, Trophy, Leaf, TreeDeciduous, MapPin } from 'lucide-react';
+import { Award, Trophy, Leaf, TreeDeciduous, MapPin, CheckCircle, ArrowUp } from 'lucide-react';
 
 // Define types for our data
 interface EcoScore {
@@ -32,8 +32,21 @@ interface EcoChallenge {
   created_at: string | null;
 }
 
+interface AcceptedChallenge {
+  challengeId: string;
+  city: string;
+  impact: {
+    air_quality: number;
+    green_cover: number;
+    user_actions: number;
+  }
+}
+
 const EcoScore = () => {
   const [selectedCity, setSelectedCity] = useState('');
+  const [activeTab, setActiveTab] = useState('scores');
+  const [acceptedChallenges, setAcceptedChallenges] = useState<AcceptedChallenge[]>([]);
+  const [scoresWithImpact, setScoresWithImpact] = useState<EcoScore[]>([]);
   
   // Fetch eco scores from Supabase
   const {
@@ -68,13 +81,75 @@ const EcoScore = () => {
     }
   });
 
-  // Complete a challenge (simulated for now)
+  // Calculate scores with impact from accepted challenges
+  useEffect(() => {
+    if (ecoScores.length > 0) {
+      const updatedScores = ecoScores.map(score => {
+        // Get challenges accepted for this city
+        const cityChallenges = acceptedChallenges.filter(c => c.city === score.city);
+        
+        if (cityChallenges.length === 0) return score;
+        
+        // Calculate total impact
+        const impacts = cityChallenges.reduce((acc, challenge) => {
+          return {
+            air_quality: acc.air_quality + challenge.impact.air_quality,
+            green_cover: acc.green_cover + challenge.impact.green_cover,
+            user_actions: acc.user_actions + challenge.impact.user_actions
+          };
+        }, { air_quality: 0, green_cover: 0, user_actions: 0 });
+        
+        // Create new score with impacts
+        return {
+          ...score,
+          air_quality_score: Math.min(100, score.air_quality_score + impacts.air_quality),
+          green_cover_score: Math.min(100, score.green_cover_score + impacts.green_cover),
+          user_actions_score: Math.min(100, score.user_actions_score + impacts.user_actions),
+          total_score: Math.min(100, score.total_score + Math.floor((impacts.air_quality + impacts.green_cover + impacts.user_actions) / 3))
+        };
+      });
+      
+      setScoresWithImpact(updatedScores);
+    }
+  }, [ecoScores, acceptedChallenges]);
+
+  // Complete a challenge
   const completeChallenge = async (challengeId: string) => {
-    // In a real app, we'd verify completion and update the database
+    if (!selectedCity) {
+      toast({
+        title: "No City Selected",
+        description: "Please select a city first to accept this challenge.",
+        variant: "destructive"
+      });
+      setActiveTab('scores');
+      return;
+    }
+    
+    // Find the challenge
+    const challenge = challenges.find(c => c.id === challengeId);
+    if (!challenge) return;
+    
+    // Create a simulated environmental impact based on challenge points
+    const impact = {
+      air_quality: Math.floor(challenge.points * 0.3),
+      green_cover: Math.floor(challenge.points * 0.4),
+      user_actions: Math.floor(challenge.points * 0.5)
+    };
+    
+    // Add to accepted challenges
+    setAcceptedChallenges(prev => [...prev, {
+      challengeId,
+      city: selectedCity,
+      impact
+    }]);
+    
     toast({
       title: "Challenge Accepted!",
-      description: "You've started working on this challenge.",
+      description: `You've accepted the "${challenge.title}" challenge for ${selectedCity}. The environmental impact is being monitored.`,
     });
+    
+    // Switch to scores tab to see the impact
+    setActiveTab('scores');
   };
 
   useEffect(() => {
@@ -82,6 +157,20 @@ const EcoScore = () => {
       setSelectedCity(ecoScores[0].city);
     }
   }, [ecoScores, selectedCity]);
+
+  // Check if a challenge has been accepted
+  const isChallengeAccepted = (challengeId: string): boolean => {
+    return acceptedChallenges.some(c => c.challengeId === challengeId);
+  };
+
+  // Calculate the improvement for a specific score field
+  const getImprovement = (city: string, field: keyof EcoScore): number => {
+    const originalScore = ecoScores.find(s => s.city === city);
+    const updatedScore = scoresWithImpact.find(s => s.city === city);
+    
+    if (!originalScore || !updatedScore) return 0;
+    return (updatedScore[field] as number) - (originalScore[field] as number);
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -98,7 +187,7 @@ const EcoScore = () => {
             Track your city's environmental score and complete challenges to improve your local ecosystem.
           </p>
           
-          <Tabs defaultValue="scores" className="w-full">
+          <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="mb-8">
               <TabsTrigger value="scores">City Scores</TabsTrigger>
               <TabsTrigger value="challenges">Eco Challenges</TabsTrigger>
@@ -122,7 +211,7 @@ const EcoScore = () => {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-4">
-                          {ecoScores.map((score, i) => (
+                          {scoresWithImpact.map((score, i) => (
                             <div 
                               key={score.id} 
                               className={`flex items-center justify-between p-3 rounded-lg cursor-pointer ${
@@ -143,7 +232,15 @@ const EcoScore = () => {
                                   <p className="text-sm text-gray-500">{score.region}</p>
                                 </div>
                               </div>
-                              <div className="text-xl font-bold text-green-600">{score.total_score}</div>
+                              <div className="text-xl font-bold text-green-600">
+                                {score.total_score}
+                                {getImprovement(score.city, 'total_score') > 0 && (
+                                  <span className="ml-2 text-sm text-green-500 flex items-center">
+                                    <ArrowUp className="h-3 w-3 mr-0.5" />
+                                    {getImprovement(score.city, 'total_score')}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -162,12 +259,20 @@ const EcoScore = () => {
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
-                          {ecoScores.filter(score => score.city === selectedCity).map(score => (
+                          {scoresWithImpact.filter(score => score.city === selectedCity).map(score => (
                             <div key={score.id} className="space-y-6">
                               <div className="space-y-2">
                                 <div className="flex justify-between items-center">
                                   <h3 className="font-medium">Total Eco-Score</h3>
-                                  <span className="text-2xl font-bold text-green-600">{score.total_score}/100</span>
+                                  <div className="flex items-center">
+                                    <span className="text-2xl font-bold text-green-600">{score.total_score}/100</span>
+                                    {getImprovement(score.city, 'total_score') > 0 && (
+                                      <span className="ml-2 text-sm text-green-500 flex items-center">
+                                        <ArrowUp className="h-4 w-4 mr-0.5" />
+                                        {getImprovement(score.city, 'total_score')}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                                 <Progress value={score.total_score} className="h-3" />
                               </div>
@@ -180,7 +285,15 @@ const EcoScore = () => {
                                   </div>
                                   <div className="flex justify-between items-center">
                                     <Progress value={score.air_quality_score} className="w-3/4 h-2" />
-                                    <span className="font-bold">{score.air_quality_score}</span>
+                                    <div className="flex items-center">
+                                      <span className="font-bold">{score.air_quality_score}</span>
+                                      {getImprovement(score.city, 'air_quality_score') > 0 && (
+                                        <span className="ml-1 text-xs text-green-500 flex items-center">
+                                          <ArrowUp className="h-3 w-3" />
+                                          {getImprovement(score.city, 'air_quality_score')}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                                 
@@ -191,7 +304,15 @@ const EcoScore = () => {
                                   </div>
                                   <div className="flex justify-between items-center">
                                     <Progress value={score.green_cover_score} className="w-3/4 h-2" />
-                                    <span className="font-bold">{score.green_cover_score}</span>
+                                    <div className="flex items-center">
+                                      <span className="font-bold">{score.green_cover_score}</span>
+                                      {getImprovement(score.city, 'green_cover_score') > 0 && (
+                                        <span className="ml-1 text-xs text-green-500 flex items-center">
+                                          <ArrowUp className="h-3 w-3" />
+                                          {getImprovement(score.city, 'green_cover_score')}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                                 
@@ -202,7 +323,15 @@ const EcoScore = () => {
                                   </div>
                                   <div className="flex justify-between items-center">
                                     <Progress value={score.user_actions_score} className="w-3/4 h-2" />
-                                    <span className="font-bold">{score.user_actions_score}</span>
+                                    <div className="flex items-center">
+                                      <span className="font-bold">{score.user_actions_score}</span>
+                                      {getImprovement(score.city, 'user_actions_score') > 0 && (
+                                        <span className="ml-1 text-xs text-green-500 flex items-center">
+                                          <ArrowUp className="h-3 w-3" />
+                                          {getImprovement(score.city, 'user_actions_score')}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -238,9 +367,16 @@ const EcoScore = () => {
                         <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
                           {challenge.points} points
                         </div>
-                        <Button onClick={() => completeChallenge(challenge.id)}>
-                          Accept Challenge
-                        </Button>
+                        {isChallengeAccepted(challenge.id) ? (
+                          <Button variant="outline" disabled className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4" />
+                            Accepted
+                          </Button>
+                        ) : (
+                          <Button onClick={() => completeChallenge(challenge.id)}>
+                            Accept Challenge
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
