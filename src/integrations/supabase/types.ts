@@ -9,6 +9,66 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      eco_challenges: {
+        Row: {
+          created_at: string | null
+          description: string
+          id: string
+          points: number
+          title: string
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          id?: string
+          points: number
+          title: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          id?: string
+          points?: number
+          title?: string
+        }
+        Relationships: []
+      }
+      eco_scores: {
+        Row: {
+          air_quality_score: number
+          city: string
+          created_at: string | null
+          green_cover_score: number
+          id: string
+          region: string | null
+          total_score: number
+          updated_at: string | null
+          user_actions_score: number
+        }
+        Insert: {
+          air_quality_score: number
+          city: string
+          created_at?: string | null
+          green_cover_score: number
+          id?: string
+          region?: string | null
+          total_score: number
+          updated_at?: string | null
+          user_actions_score: number
+        }
+        Update: {
+          air_quality_score?: number
+          city?: string
+          created_at?: string | null
+          green_cover_score?: number
+          id?: string
+          region?: string | null
+          total_score?: number
+          updated_at?: string | null
+          user_actions_score?: number
+        }
+        Relationships: []
+      }
       tree_locations: {
         Row: {
           city: string
@@ -71,6 +131,35 @@ export type Database = {
           suitability_score?: number | null
         }
         Relationships: []
+      }
+      user_challenges: {
+        Row: {
+          challenge_id: string | null
+          completed_at: string | null
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          challenge_id?: string | null
+          completed_at?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          challenge_id?: string | null
+          completed_at?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_challenges_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "eco_challenges"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_location_searches: {
         Row: {

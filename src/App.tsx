@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Recommendations from "./pages/Recommendations";
 import About from "./pages/About";
 import Dashboard from "./pages/Dashboard";
+import EcoScore from "./pages/EcoScore";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -23,6 +24,7 @@ const App = () => (
           <Route path="/recommendations" element={<Recommendations />} />
           <Route path="/about" element={<About />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/eco-score" element={<EcoScore />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

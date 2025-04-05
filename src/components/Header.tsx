@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, X, Leaf } from 'lucide-react';
+import { Menu, X, Leaf, Award } from 'lucide-react';
 import { Button } from './ui/button';
 
 const Header = () => {
@@ -34,6 +34,10 @@ const Header = () => {
             </Link>
             <Link to="/dashboard" className="text-gray-700 hover:text-green-600 transition-colors">
               Sustainability Dashboard
+            </Link>
+            <Link to="/eco-score" className="flex items-center gap-1 text-gray-700 hover:text-green-600 transition-colors">
+              <Award className="h-4 w-4" />
+              <span>Eco-Score</span>
             </Link>
             <Link to="/faq" className="text-gray-700 hover:text-green-600 transition-colors">
               FAQ
@@ -91,6 +95,16 @@ const Header = () => {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Sustainability Dashboard
+                </Link>
+              </li>
+              <li>
+                <Link 
+                  to="/eco-score" 
+                  className="flex items-center gap-1 text-gray-700 hover:text-green-600"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Award className="h-4 w-4" />
+                  <span>Eco-Score</span>
                 </Link>
               </li>
               <li>
